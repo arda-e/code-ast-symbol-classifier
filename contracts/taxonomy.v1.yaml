@@ -1,0 +1,88 @@
+taxonomyVersion: v1
+
+# The single source of truth for the label set. Code reads this file; no module
+# hardcodes the class list. If the taxonomy changes again, only this file and a
+# new taxonomyVersion change.
+#
+# The one rule behind the list: no class restates a mechanical fact. "Touches the
+# database" is not here, because the graph already knows it — predicting it again
+# would reproduce a known fact at lower accuracy. Every class below is about
+# INTENT, which no framework API surface encodes.
+#
+# `definition` is deliberately EMPTY. The per-class definitions do not exist
+# anywhere yet and cannot be invented by whoever writes the training code —
+# they need someone who knows the production architecture. Labelling cannot
+# start before they are filled in. See docs/taxonomy.md.
+
+classes:
+  - label: orchestrator
+    definition: ""
+    summary: Sequences other units to complete a workflow; its value is in the composition.
+    discriminating_question: If you deleted its calls, would a rule remain? If not, orchestrator.
+    confusable_with: [domain_logic, adapter]
+
+  - label: domain_logic
+    definition: ""
+    summary: Carries a business rule, invariant or calculation.
+    discriminating_question: Does the result depend on a domain rule?
+    confusable_with: [orchestrator, transformer, validator, policy]
+
+  - label: transformer
+    definition: ""
+    summary: Reshapes data without deciding anything.
+    discriminating_question: Is this a shape change (User to UserDTO) or a rule?
+    confusable_with: [domain_logic, utility]
+
+  - label: validator
+    definition: ""
+    summary: Checks input against constraints, returning or throwing a verdict.
+    discriminating_question: "Is this well-formed?"
+    confusable_with: [policy, domain_logic]
+
+  - label: policy
+    definition: ""
+    summary: Decides permission or eligibility — authorization, feature gate, quota.
+    discriminating_question: "Is this allowed?"
+    confusable_with: [validator, domain_logic]
+
+  - label: adapter
+    definition: ""
+    summary: Translates a single external boundary into local terms.
+    discriminating_question: Does it wrap exactly one boundary?
+    confusable_with: [orchestrator]
+
+  - label: factory
+    definition: ""
+    summary: Constructs and wires objects, closures or behaviour.
+    discriminating_question: Is the output a value, or a thing?
+    confusable_with: [configuration]
+
+  - label: configuration
+    definition: ""
+    summary: Assembles settings and connection values.
+    discriminating_question: Is the output configuration?
+    confusable_with: [factory]
+
+  - label: utility
+    definition: ""
+    summary: Domain-independent general helper.
+    discriminating_question: Could it move to another project unchanged?
+    confusable_with: [transformer]
+
+  - label: unknown
+    definition: ""
+    summary: The labeller's abstention — "I could not decide".
+    discriminating_question: ""
+    confusable_with: []
+    # NOTE: this collides with the `unknown` OUTPUT bucket used when the model's
+    # confidence falls below the tentative threshold. One is a class in the input,
+    # the other a decision about the output. Sharing a name is an unresolved design
+    # wart — see docs/taxonomy.md, open question 3.
+
+# Confidence policy applied to predictions (see evaluation/thresholds.py).
+# These numbers are assumptions carried over from the earlier spike; they are
+# not yet measured. The calibration check in evaluation/metrics.py exists to
+# find out whether they separate anything at all.
+thresholds:
+  accept: 0.85
+  tentative: 0.65

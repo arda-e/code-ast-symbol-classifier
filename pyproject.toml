@@ -1,19 +1,57 @@
 [project]
 name = "code-ast-symbol-classifier"
 version = "0.1.0"
-description = "Add your description here"
+description = "Architectural intent classification for code symbols — hashed lexical + graph/AST features over logistic regression"
 readme = "README.md"
 authors = [
-    { name = "Elif", email = "elifimil77@gmail.com" }
+    { name = "Elif", email = "elifimil77@gmail.com" },
+    { name = "Arda", email = "mericardaeren@gmail.com" },
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "mmh3>=5.0.0",
+    "numpy>=2.0.0",
+    "pyyaml>=6.0.0",
     "scikit-learn>=1.9.0",
+    "scipy>=1.14.0",
 ]
 
 [project.scripts]
-code-ast-symbol-classifier = "code_ast_symbol_classifier:main"
+code-ast-symbol-classifier = "code_ast_symbol_classifier.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14.0",
+    "pre-commit>=4.0.0",
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+    "types-pyyaml>=6.0.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    # Tests that specify an unimplemented slot. They fail until the slot is filled,
+    # so they are marked and excluded from the blocking CI run.
+    "spec: describes behaviour of a not-yet-implemented module",
+]
+
+[tool.coverage.run]
+source = ["src/code_ast_symbol_classifier"]

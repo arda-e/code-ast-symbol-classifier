@@ -1,0 +1,137 @@
+{
+  "featureVersion": "v1",
+  "hash": {
+    "algorithm": "murmur3_x86_32",
+    "seed": 0,
+    "buckets": 4096,
+    "signed": false,
+    "encoding": "utf-8"
+  },
+  "note": "input string -> expected bucket index. Both the Python trainer and any TypeScript inference port must reproduce every row exactly. A mismatch raises nothing at runtime; it only makes the model quietly worse.",
+  "cases": [
+    {
+      "input": "name:place",
+      "bucket": 669
+    },
+    {
+      "input": "name:order",
+      "bucket": 2966
+    },
+    {
+      "input": "name:validate",
+      "bucket": 3658
+    },
+    {
+      "input": "name:is",
+      "bucket": 3419
+    },
+    {
+      "input": "name:x",
+      "bucket": 3171
+    },
+    {
+      "input": "name:handler2",
+      "bucket": 659
+    },
+    {
+      "input": "owner:order",
+      "bucket": 3183
+    },
+    {
+      "input": "owner:service",
+      "bucket": 677
+    },
+    {
+      "input": "owner:controller",
+      "bucket": 1504
+    },
+    {
+      "input": "path:src",
+      "bucket": 200
+    },
+    {
+      "input": "path:orders",
+      "bucket": 2114
+    },
+    {
+      "input": "path:service",
+      "bucket": 3791
+    },
+    {
+      "input": "callee:order",
+      "bucket": 3531
+    },
+    {
+      "input": "callee:factory",
+      "bucket": 608
+    },
+    {
+      "input": "callee:create",
+      "bucket": 3567
+    },
+    {
+      "input": "callee:inventory",
+      "bucket": 3905
+    },
+    {
+      "input": "callee:reserve",
+      "bucket": 938
+    },
+    {
+      "input": "callee:payment",
+      "bucket": 76
+    },
+    {
+      "input": "callee:charge",
+      "bucket": 275
+    },
+    {
+      "input": "callee:repository",
+      "bucket": 3557
+    },
+    {
+      "input": "callee:save",
+      "bucket": 1729
+    },
+    {
+      "input": "callee:validate",
+      "bucket": 2057
+    },
+    {
+      "input": "accepts:create",
+      "bucket": 2722
+    },
+    {
+      "input": "accepts:order",
+      "bucket": 2311
+    },
+    {
+      "input": "accepts:dto",
+      "bucket": 2152
+    },
+    {
+      "input": "returns:order",
+      "bucket": 2487
+    },
+    {
+      "input": "returns:boolean",
+      "bucket": 4005
+    },
+    {
+      "input": "returns:void",
+      "bucket": 1580
+    },
+    {
+      "input": "name:sipariş",
+      "bucket": 2678
+    },
+    {
+      "input": "name:ödeme",
+      "bucket": 1111
+    },
+    {
+      "input": "name:averyveryverylongidentifiertokenthatkeepsgoingandgoing",
+      "bucket": 2823
+    }
+  ]
+}

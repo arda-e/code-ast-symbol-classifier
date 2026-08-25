@@ -1,0 +1,57 @@
+{
+  "labelsetId": "fixture-sample",
+  "taxonomyVersion": "v1",
+  "note": "SYNTHETIC. These symbols and labels were written to exercise the harness — folds, metrics, reports, the ablation table. They are not training data and no accuracy number produced from them means anything. Real labels live in data/labels/ and are produced by a person against defined classes.",
+  "labels": {
+    "src/orders/order.service.ts#OrderService.placeOrder": "orchestrator",
+    "src/checkout/checkout.service.ts#CheckoutService.checkoutFlow": "orchestrator",
+    "src/collector/worker.ts#processRun": "orchestrator",
+    "src/catalog/sync.ts#syncCatalog": "orchestrator",
+    "src/billing/invoice.service.ts#InvoiceService.issueInvoice": "orchestrator",
+    "src/onboarding/register.ts#registerCustomer": "orchestrator",
+
+    "src/pricing/discount.ts#calculateDiscount": "domain_logic",
+    "src/pricing/eligibility.ts#isEligibleForDiscount": "domain_logic",
+    "src/shipping/cost.ts#computeShippingCost": "domain_logic",
+    "src/billing/penalty.ts#applyLatePenalty": "domain_logic",
+    "src/inventory/reservation.ts#canReserve": "domain_logic",
+
+    "src/users/user.mapper.ts#toUserDto": "transformer",
+    "src/orders/order.mapper.ts#mapOrderToSummary": "transformer",
+    "src/orders/order.view.ts#buildOrderView": "transformer",
+    "src/shared/address.ts#normalizeAddress": "transformer",
+    "src/reporting/row.mapper.ts#toReportRow": "transformer",
+
+    "src/validation/email.ts#validateEmail": "validator",
+    "src/validation/order.ts#validateOrderPayload": "validator",
+    "src/validation/amount.ts#assertPositiveAmount": "validator",
+    "src/validation/registration.ts#validateRegistration": "validator",
+
+    "src/auth/permissions.ts#canAccessAdminPanel": "policy",
+    "src/features/gate.ts#isFeatureEnabled": "policy",
+    "src/quota/quota.ts#hasQuotaRemaining": "policy",
+
+    "src/payments/stripe.gateway.ts#StripeGateway.charge": "adapter",
+    "src/messaging/kafka.publisher.ts#KafkaOrderPublisher.publish": "adapter",
+    "src/storage/s3.client.ts#S3ArtifactStore.putObject": "adapter",
+    "src/search/elastic.adapter.ts#ElasticSearchAdapter.query": "adapter",
+
+    "src/orders/order.factory.ts#createOrderFactory": "factory",
+    "src/http/client.factory.ts#buildHttpClient": "factory",
+    "src/resilience/retry.factory.ts#makeRetryPolicy": "factory",
+
+    "src/config/database.config.ts#loadDatabaseConfig": "configuration",
+    "src/config/kafka.config.ts#buildKafkaOptions": "configuration",
+    "src/config/env.ts#readEnvSettings": "configuration",
+
+    "src/shared/array.ts#chunk": "utility",
+    "src/shared/money.ts#formatCurrency": "utility",
+    "src/shared/object.ts#deepMerge": "utility",
+    "src/shared/date.ts#daysBetween": "utility",
+    "src/shared/string.ts#titleCase": "utility",
+    "src/shared/format.ts#formatDate": "utility",
+
+    "src/pipeline/step.ts#process": "unknown",
+    "src/pipeline/runner.ts#execute": "unknown"
+  }
+}

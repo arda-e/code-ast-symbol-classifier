@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+
+# Trained artifacts and generated reports — reproducible from data, never committed
+models/
+reports/
+
+# Machine-local corpora. Anything not reproducible on another machine stays out;
+# committed data lives in data/fixtures/ and data/labels/ only.
+data/raw/
+data/processed/
+data/external/
+# ...but keep the directories themselves, so the layout is visible in a clone
+!data/*/.gitkeep
+
+.env
+.env.local
