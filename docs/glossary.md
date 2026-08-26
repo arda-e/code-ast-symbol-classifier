@@ -1,175 +1,181 @@
-# Terim sözlüğü
+# Glossary
 
-Her terimin yanında repo'da nerede karşına çıkacağı yazılı. Sıra kabaca boru
-hattının sırası; alfabetik değil, çünkü terimler birbirini gerektiriyor.
+Each term says where in the repository you will meet it. The order roughly
+follows the pipeline rather than the alphabet, because the terms build on one
+another.
 
-## Problem
+## The problem
 
-**architectural intent** — Bir sembolün *ne için* yazıldığı. Tahmin etmeye
-çalıştığımız şey. "Veritabanına yazıyor mu" mekanik bir gerçek ve grafın işi;
-"bu bir iş kuralı mı yoksa sadece veri mi şekillendiriyor" bir yargı ve modelin
-işi.
+**architectural intent** — What a symbol was written *for*. The thing we are
+trying to predict. "Does it write to the database" is a mechanical fact and the
+graph's job; "is this a business rule or is it just reshaping data" is a
+judgement and the model's job.
 → `contracts/taxonomy.v1.yaml`, `docs/taxonomy.md`
 
-**outDegree / inDegree** — Sembolün kaç farklı şeyi çağırdığı / kaç yerden
-çağrıldığı. Aralarındaki asimetri mimariyi belirliyor: outDegree'yi tek dosyaya
-bakarak bulabilirsin, inDegree'yi bulamazsın — bütün kod tabanını görmen gerekir.
-→ `contracts/feature-spec.v1.json` (`degree` grubu)
+**outDegree / inDegree** — How many distinct things a symbol calls / how many
+places call it. The asymmetry between them shapes the architecture: you can find
+outDegree by looking at one file, but not inDegree — for that you need the whole
+codebase.
+→ `contracts/feature-spec.v1.json` (the `degree` group)
 
-**graph-global / file-local** — Bir feature'ın bütün grafiği mi yoksa tek dosyayı
-mı gerektirdiği. Graph-global feature kullandığın anda sınıflandırma dosya bazlı
-incremental olamıyor: hiç değişmemiş bir sembol, başka bir dosya onu çağırmaya
-başladığı için sınıf değiştirebiliyor.
+**graph-global / file-local** — Whether a feature needs the entire graph or just
+one file. The moment you use a graph-global feature, classification can no longer
+be file-incremental: a symbol nobody touched can change class because a different
+file started calling it.
 → `features/spec.py` → `NumericField.is_graph_global`
 
 ## Feature engineering
 
-**feature engineering** — Ham veriyi modele verilebilir sayılara çevirme işi.
-Belirlenimci: aynı girdi her zaman aynı çıktı. Öğrenme içermiyor, ve bu boru
-hattının çoğunu kaplıyor.
-→ `features/` paketinin tamamı
+**feature engineering** — Turning raw data into numbers a model can take.
+Deterministic: same input, same output. It contains no learning, and it is most
+of this pipeline.
+→ the whole `features/` package
 
-**token** — Bir identifier'ın bölünmüş hali. `placeOrder` → `place`, `order`.
+**token** — An identifier after splitting. `placeOrder` → `place`, `order`.
 → stage 1, `features/lexical.py`
 
-**namespace** — Feature string'inin başındaki kaynak etiketi: `name:`, `callee:`,
-`path:`. Aynı kelimenin nereden geldiğini ayırıyor, ki `name:validate` ile
-`callee:validate` farklı sinyaller olarak kalsın.
+**namespace** — The source tag at the front of a feature string: `name:`,
+`callee:`, `path:`. It keeps the same word distinguishable by origin, so
+`name:validate` and `callee:validate` stay different signals.
 → stage 2, `contracts/feature-spec.v1.json` → `lexical.namespaces`
 
-**feature hashing** — Feature string'ini sabit boyutlu bir vektörde bir pozisyona
-indirmek. Amaç anlam üretmek değil, sözlük tutmayı gereksiz kılmak. Seçilen
-fonksiyon MurmurHash3 x86_32, sabit seed.
+**feature hashing** — Reducing a feature string to a position in a fixed-size
+vector. The goal is not to produce meaning but to make a vocabulary unnecessary.
+The chosen function is MurmurHash3 x86_32 with a fixed seed.
 → `features/hashing.py`
 
-**collision (çarpışma)** — İki farklı feature string'inin aynı kovaya düşmesi.
-Sabit boyutlu uzayın kaçınılmaz bedeli; bir sembol 4096 kovanın ~20'sini
-kullandığı için seyrek kalıyor.
-→ `make explain` çıktısında görünür
+**collision** — Two different feature strings landing in the same bucket. The
+unavoidable price of a fixed-size space; rare in practice because a symbol only
+uses about 20 of 4096 buckets.
+→ visible in `make explain` output
 
-**binary presence** — Bir feature'ın kaç kez geçtiğini değil, geçip geçmediğini
-kaydetmek (`1` ya da `0`). Tekrar sayısı zaten sayısal blokta temsil ediliyor;
-aynı bilgiyi iki yerden vermek modele yardım etmiyor.
+**binary presence** — Recording whether a feature occurred, not how many times
+(`1` or `0`). Repetition is already represented in the numeric block, and giving
+the model the same information twice does not help it.
 → `contracts/feature-spec.v1.json` → `hash.occurrence`
 
-**sparse (seyrek)** — Çoğu elemanı sıfır olan vektör. 4163 pozisyonun ~35'i dolu
-olduğu için sadece sıfırdan farklı olanlar saklanıyor.
+**sparse** — A vector where most entries are zero. About 35 of 4163 positions are
+filled, so only the non-zero ones are stored.
 → `features/build.py` (`csr_matrix`)
 
-**StandardScaler / ölçekleme** — Sayısal bloğu ortak bir ölçeğe çekmek
-(ortalamayı çıkar, yayılıma böl). Olmazsa `inDegree = 47` gibi tek bir değer
-diğer dört bin pozisyonu bastırıyor.
+**StandardScaler / scaling** — Bringing the numeric block onto a common scale
+(subtract the mean, divide by the spread). Without it a single value like
+`inDegree = 47` drowns out the other four thousand positions.
 → stage 4
 
-**data leakage (sızıntı)** — Test verisinin eğitime sızması. Buradaki tipik
-hâli: ölçekleyiciyi bütün veri üstünde fit etmek. Hata vermiyor, sadece bütün
-skorları olduğundan iyi gösteriyor.
+**data leakage** — Test data influencing training. The typical form here: fitting
+the scaler on all the data. It raises nothing and simply makes every score look
+better than it is.
 → `pipeline.py` → `_run_fold`
 
-## Model
+## The model
 
-**logistic regression** — Adında "regression" geçse de sınıflandırma için
-kullanılıyor. Öğrendiği şeyin tamamı bir ağırlık matrisi ve bir bias vektörü.
-Tek katmanlı bir sinir ağı olarak da okunabilir.
+**logistic regression** — Despite "regression" in the name, it is used for
+classification. Everything it learns is a weight matrix and a bias vector. It can
+also be read as a single-layer neural network.
 → stage 5, `model/train.py`
 
-**logit** — Softmax'tan önceki ham skor. Aralığı belirsiz; tek başına anlamı yok,
-sadece birbirleriyle karşılaştırılabilir.
+**logit** — The raw score before softmax. Its range is unbounded; on its own it
+means nothing, and only comparisons between logits are meaningful.
 → `model/artifact.py` → `predict_proba`
 
-**softmax** — Skorları toplamı 1 olan olasılıklara çeviren fonksiyon. Üstel alma
-iki iş birden yapıyor: negatifleri pozitife çeviriyor ve farkı keskinleştiriyor.
+**softmax** — Turns scores into probabilities that sum to 1. Exponentiating does
+two jobs at once: it makes negatives positive, and it sharpens the gap between
+them.
 → `model/artifact.py`
 
-**cross-entropy** — Kayıp fonksiyonu. Doğru sınıfa düşük olasılık verilmesini
-cezalandırıyor, ve emin olup yanılmayı özellikle ağır cezalandırıyor. Model bu
-yüzden temkinli olmayı öğreniyor.
-→ sklearn'ün içinde; doğrudan yazmıyorsun
+**cross-entropy** — The loss function. It penalises giving the correct class a low
+probability, and penalises being confidently wrong especially hard. That is what
+teaches the model to be cautious.
+→ inside sklearn; you do not write it
 
-**regularization / `C`** — Ağırlıkların büyümesini cezalandırarak ezberlemeyi
-engelleyen ayar. ~200 örneğe karşı 4163 feature varken kritik: kısıtsız bir model
-her örneğe özel bir feature bulup eğitimde %100 alır, yeni bir sembolde çöker.
-Küçük `C` = daha sıkı kısıt = daha basit model.
+**regularization / `C`** — The setting that stops memorisation by penalising large
+weights. Critical with ~200 examples against 4163 features: an unconstrained model
+finds a private feature for every example, scores 100% in training, and collapses
+on an unseen symbol. Smaller `C` = tighter constraint = simpler model.
 → `config.py` → `TrainingConfig.regularisation`
 
-**class_weight="balanced"** — Nadir sınıftaki hatayı pahalı hale getiriyor.
-Olmazsa model "her şeye en kalabalık sınıfı de" stratejisini keşfediyor — ki
-accuracy için gerçekten iyi bir strateji, bizim için işe yaramaz.
+**class_weight="balanced"** — Makes a mistake on a rare class expensive. Without
+it the model discovers the strategy "always answer with the biggest class" —
+genuinely good for accuracy, useless for us.
 → `config.py`
 
-**çıkarım (inference)** — Eğitilmiş modeli yeni bir girdiye uygulamak. Bu sırada
-model **hiçbir şey öğrenmiyor**; sadece donmuş `W` ve `b` ile hesap yapıyor.
+**inference** — Applying a trained model to a new input. The model **learns
+nothing** while doing it; it computes with frozen `W` and `b`.
 → `model/artifact.py` → `predict_proba`
 
-## Ölçme
+## Measurement
 
-**accuracy** — Doğru bilinen oran. Tek başına yanıltıcı: sınıflar dengesizken en
-kalabalık sınıfı ödüllendiriyor. Raporda geçiyor ama asla yalnız değil.
+**accuracy** — The fraction predicted correctly. Misleading alone: with unbalanced
+classes it rewards the biggest one. It appears in the report but never by itself.
 → `evaluation/metrics.py`
 
-**macro-F1** — Her sınıfın F1'ini ayrı hesaplayıp **eşit ağırlıkla** ortalamak.
-Kalabalık sınıfı bilip diğer dokuzunu bilmemek yüksek skor getirmiyor.
-Raporlanacak asıl sayı bu.
+**macro-F1** — Compute each class's F1 separately and average them with **equal
+weight**. Getting the common class right and the other nine wrong does not
+produce a good score. This is the number to report.
 → `evaluation/metrics.py`
 
-**precision / recall** — Precision: "bu sınıf dediklerimin kaçı doğruydu".
-Recall: "bu sınıf olanların kaçını yakaladım". F1 ikisinin dengesi.
+**precision / recall** — Precision: "of the things I called this class, how many
+were". Recall: "of the things that were this class, how many did I catch". F1
+balances the two.
 → `evaluation/results.py` → `ClassMetrics`
 
-**support** — Bir sınıfın test verisindeki gerçek örnek sayısı.
+**support** — How many real examples of a class are in the test data.
 
-**low-N** — Örnek sayısı fold sayısından az olduğu için sonucu gürültü sayılması
-gereken sınıf. İşaretlenmezse tabloda diğerleriyle aynı ağırlıkta görünüyor ve
-yanlış karar verdiriyor.
+**low-N** — A class with fewer examples than there are folds, so its result is
+noise. Unmarked, it sits in the table at the same visual weight as everything
+else and pulls decisions the wrong way.
 → `evaluation/folds.py` → `low_n_classes`
 
-**stratified k-fold** — Veriyi k parçaya bölerken her parçada sınıf oranlarını
-koruyan çapraz doğrulama. Her örnek tam bir kez test ediliyor, hepsi eğitimde de
-kullanılıyor — az etiketin varken veriyi israf etmemek için.
+**stratified k-fold** — Cross-validation that preserves class proportions in every
+fold. Each example is tested exactly once and used for training the rest of the
+time — the point being not to waste labels that were expensive to produce.
 → `evaluation/folds.py`
 
-**coverage** — Modelin eşiği geçip cevap verebildiği sembollerin oranı. "%92
-doğruluk" cümlesi bu olmadan hiçbir şey ifade etmiyor; sembollerin %5'ine cevap
-veriyor olabilirsin.
+**coverage** — The fraction of symbols the model was confident enough to answer
+for. "92% accurate" says nothing without it; you might be answering on 5% of
+symbols.
 → `evaluation/metrics.py`
 
-**precision@covered** — Cevap verdiklerinin içindeki isabet oranı. Coverage ile
-takas ediliyor: eşiği yükselt, precision artar coverage düşer.
+**precision@covered** — Accuracy among the answers actually given. It trades
+against coverage: raise the threshold and precision goes up while coverage goes
+down.
 
-**abstention** — Modelin "bilmiyorum" deme oranı. Coverage'ın diğer yüzü.
+**abstention** — How often the model says "I don't know". The other side of
+coverage.
 
-**calibration (kalibrasyon)** — Modelin verdiği olasılığın gerçek isabet oranıyla
-örtüşmesi. Softmax'ın verdiği `0.94` gerçek bir olasılık gibi *görünüyor* ama
-olduğu garanti değil. Kontrol basit ve zorunlu: accept kovasındaki isabet oranı
-gerçekten tentative'inkinden yüksek mi?
+**calibration** — Whether the probability the model reports matches how often it
+is actually right. A softmax output of `0.94` *looks* like a probability but is
+not guaranteed to behave like one. The check is blunt and mandatory: is the accept
+bucket really more precise than the tentative bucket?
 → `evaluation/results.py` → `Calibration.separates`
 
-**confusion matrix** — Hangi sınıfın hangisiyle karıştırıldığını gösteren tablo.
-Taksonomi zaten nerede karışacağını öngörüyor: validator ↔ policy, orchestrator ↔
-domain_logic.
+**confusion matrix** — Which class gets mistaken for which. The taxonomy already
+predicts where that will happen: validator ↔ policy, orchestrator ↔ domain_logic.
 → `evaluation/confusion.py`
 
-**ablation** — Bir bileşeni çıkarıp sonucun ne kadar düştüğüne bakarak katkısını
-ölçmek. Buradaki dört varyant: A (sadece isimler), B-local, B-global, C (hepsi).
-A tek başına C'ye yakın skor veriyorsa model kelime eşleştirmesi yapıyor demektir
-— ve kelime eşleştirmesi farklı isimlendirme geleneği olan bir repo'da çöker.
+**ablation** — Removing a component and measuring how far the result falls, to
+find out what it contributed. The four variants here: A (names only), B-local,
+B-global, C (everything). If A alone scores nearly as well as C, the model is
+doing word matching — and word matching collapses in a codebase with different
+naming habits.
 → `experiments/ablation.py`
 
-## Sözleşme
+## Contracts
 
-**featureVersion / taxonomyVersion** — Vektörün düzeni ve etiket listesi ayrı
-sürüm numaraları taşıyor, çünkü bağımsız değişiyorlar: taksonomi değişince
-vektör aynı kalıyor, yeni bir sayaç eklenince sınıflar aynı kalıyor.
+**featureVersion / taxonomyVersion** — The vector layout and the label list carry
+separate version numbers because they change independently: a taxonomy change
+leaves the vector alone, and a new counter leaves the classes alone.
 → `contracts/model-artifact.md`
 
-**golden fixture** — İki dilin de okuyup aynı sonucu üretmesi gereken referans
-dosya. Parity'nin sessizce bozulmasını yakalayan tek mekanizma.
+**golden fixture** — A reference file both languages must read and reproduce
+identically. The only mechanism that catches parity breaking silently.
 → `contracts/fixtures/`
 
-**parity** — Python (eğitim) ve TypeScript (çıkarım) taraflarının birebir aynı
-sayıları üretmesi. Bozulduğunda **hata vermiyor**, sadece sonuç kötüleşiyor.
+**parity** — Python (training) and TypeScript (inference) producing byte-identical
+numbers. When it breaks, **nothing raises** — the results just get worse.
 → `features/hashing.py`, `tests/test_hashing.py`
 
-**artifact** — Eğitilmiş modelin dosya hâli: ağırlıklar, bias, sınıf isimleri,
-ölçekleyici parametreleri ve sürümler. Üretime giden şeyin tamamı.
+**artifact** — The trained model as a file: weights, bias, class names, scaler
+parameters and versions. The whole of what ships to production.
 → `contracts/model-artifact.md`, `model/artifact.py`

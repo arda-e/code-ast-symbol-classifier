@@ -1,23 +1,23 @@
-# Bir sembol nasıl sayıya, sayı nasıl tahmine dönüşüyor
+# How a symbol becomes numbers, and numbers become a prediction
 
-Bu doküman tek bir fonksiyonu baştan sona takip ediyor. Buradaki bütün sayılar
-uydurma değil — `contracts/fixtures/vector-golden.json` içinde duruyorlar ve
-testler tam olarak bunları doğruluyor.
+This document follows one function from beginning to end. None of the numbers
+below are invented — they live in `contracts/fixtures/vector-golden.json` and the
+tests assert exactly these values.
 
-Aynı şeyi canlı görmek için:
+To watch the same thing happen live:
 
 ```bash
 make explain
 ```
 
-Boş slot'lar varken bile çalışır; her aşama ya çıktısını basar ya da "henüz
-yazılmadı" deyip hangi teste bakman gerektiğini söyler.
+It works even with the stages still empty; each one either prints its output or
+says it has not been written yet and points at the test that specifies it.
 
 ---
 
-## 0. Sorumuz ne
+## 0. The question
 
-Elimizdeki fonksiyon:
+The function:
 
 ```ts
 async placeOrder(input: CreateOrderDto) {
@@ -29,43 +29,44 @@ async placeOrder(input: CreateOrderDto) {
 }
 ```
 
-Sorduğumuz soru "bu ne yapıyor" değil — **"bu neden yazılmış"**. Ne yaptığını
-graf zaten biliyor: veritabanına yazıyor, dört şey çağırıyor, async. Bilmediği
-şey, bu fonksiyonun kendi başına hiçbir karar vermediği, değerinin tamamen dört
-birimi doğru sırayla dizmekte olduğu. Yani `orchestrator`.
+The question is not "what does this do" but **"why was it written"**. What it
+does, the graph already knows: it writes to a database, calls four things, is
+async. What the graph cannot see is that this function makes no decision of its
+own — its entire value is putting four units in the right order. That is
+`orchestrator`.
 
-Testi basit: **çağrılarını silersen geriye bir kural kalıyor mu?** Kalmıyorsa
+The test is simple: **delete its calls; does a rule remain?** If not, it is an
 orchestrator.
 
 ---
 
-## 1. Modele giden şey ne — ve ne gitmiyor
+## 1. What reaches the model, and what does not
 
-Sezgi burada genelde yanlış çıkıyor, o yüzden en başta netleştirelim.
+Intuition usually gets this wrong, so it is worth settling first.
 
-Modele fonksiyonun **gövdesi gitmiyor.** Ne `if` blokları, ne değişken adları,
-ne yorumlar. Model bunları görüyor:
+The function **body does not reach the model.** Not the `if` blocks, not the
+variable names, not the comments. The model sees this:
 
 ```
-isimden gelenler                    isimden gelmeyenler
-─────────────────                   ───────────────────
-sembolün adı      placeOrder        outDegree, inDegree
-sahibi            OrderService      async, exported, paramCount
-dosya yolu        src/orders/...    karşılaştırma / dallanma / await sayaçları
-çağırdıklarının   create, reserve   yan etkiler, mutasyonlar
-adları            charge, save
-parametre tipi    CreateOrderDto
-dönüş tipi        Promise<Order>
+from names                          not from names
+──────────                          ──────────────
+the symbol's name  placeOrder       outDegree, inDegree
+its owner          OrderService     async, exported, paramCount
+its file path      src/orders/...   comparison / branch / await counters
+callee names       create, reserve  side effects, mutations
+                   charge, save
+parameter type     CreateOrderDto
+return type        Promise<Order>
 ```
 
-Sağ sütundaki her şey parser'ın çıkardığı sayılabilir gerçekler; sol sütun
-isimler. Dikkat: **çağırdığı fonksiyonların isimleri gövdeden geliyor** — parser
-içeri bakıp `this.payment.charge(order)` satırını buluyor. Yani bilgi gövdeden
-çıkıyor, ama modele bir isim olarak ulaşıyor.
+Everything on the right is a countable fact the parser extracted; the left is
+names. Note the fourth row: **callee names come from inside the body** — the
+parser looks in and finds `this.payment.charge(order)`. So the information does
+come from the body, but it reaches the model as a name.
 
 ---
 
-## 2. İsimleri kelimelere böl  *(stage 1)*
+## 2. Split names into words  *(stage 1)*
 
 ```
 placeOrder              →  place, order
@@ -73,16 +74,16 @@ CreateOrderDto          →  create, order, dto
 isEligibleForDiscount   →  is, eligible, for, discount
 ```
 
-**Neden bölüyoruz?** Bölmezsen `placeOrder` tek başına bir kova olur ve
-`placeBid`, `cancelOrder`, `orderTotal` ile hiçbir ortak sinyal paylaşmaz. Model
-hiçbir şey genelleştiremez — sadece daha önce gördüğü tam isimleri tanır. Bölünce
-`order` kelimesi bütün bu isimler arasında ortak bir sinyal haline geliyor.
+**Why split?** Left whole, `placeOrder` becomes its own isolated feature, sharing
+nothing with `placeBid`, `cancelOrder` or `orderTotal`. The model could never
+generalise — it would only recognise names it had already seen. Split, the word
+`order` becomes a signal shared across all of them.
 
 ---
 
-## 3. Her kelimenin nereden geldiğini yaz  *(stage 2)*
+## 3. Record where each word came from  *(stage 2)*
 
-`placeOrder` için üretilen 21 string:
+The 21 strings produced for `placeOrder`:
 
 ```
 name:place       name:order
@@ -96,41 +97,41 @@ accepts:create   accepts:order      accepts:dto
 returns:order
 ```
 
-**Neden başlarına etiket koyuyoruz?** Çünkü aynı kelime, geldiği yere göre
-bambaşka bir şey anlatıyor:
+**Why prefix them?** Because the same word means something entirely different
+depending on where it came from:
 
 ```
-name:validate      bu fonksiyonun kendi adında "validate" geçiyor
-                   → büyük ihtimalle validator
+name:validate      this function's own name contains "validate"
+                   → probably a validator
 
-callee:validate    bu fonksiyon, doğrulama yapan başka bir şeyi çağırıyor
-                   → kendisi doğrulamıyor; belki orchestrator
+callee:validate    this function calls something that validates
+                   → it does not validate; perhaps an orchestrator
 ```
 
-Etiket olmasa ikisi de aynı kovaya düşer ve model aradaki farkı **asla**
-öğrenemez.
+Without the prefix both land in the same bucket and the model can **never** learn
+the difference.
 
-İki küçük karar daha, ikisi de sözleşmede yazılı:
+Two smaller decisions, both written into the contract:
 
-- **Çağrıda alıcıyı da alıyoruz.** `save` her yerde geçiyor, `repository.save`
-  geçmiyor. Alıcı çoğu zaman metot adından daha güçlü sinyal.
-- **`this` atılıyor.** Neredeyse her metot çağrısında var, hiçbir şey ayırmıyor,
-  boşuna kova harcıyor.
+- **The receiver is kept in a call.** `save` appears everywhere; `repository.save`
+  does not. The receiver is often a stronger signal than the method name.
+- **`this` is dropped.** It sits on nearly every method call, separates nothing,
+  and would waste a bucket.
 
 ---
 
-## 4. String'leri kovalara indir  *(hash)*
+## 4. Reduce strings to buckets  *(hashing)*
 
-Buradaki fikri doğru kurmak önemli. Hash'i **kelimeyi sayıya çevirmek** için
-kullanmıyoruz; sınırsız sayıda olabilecek string'i **sabit boyutlu bir uzayda bir
-kovaya yerleştirmek** için kullanıyoruz.
+Getting the idea right here matters. Hashing is not used to **turn a word into a
+number**; it is used to place an unbounded set of strings into **a bucket in a
+fixed-size space**.
 
-Alternatif bir sözlük tutmak olurdu — ama gerçek bir kod tabanında yüz binlerce
-identifier var, her yeni repoda yenileri çıkıyor, ve o sözlüğü üretmek, saklamak,
-sürümlemek ve **iki dil arasında taşımak** gerekiyor. Hash bunu tamamen ortadan
-kaldırıyor.
+The alternative would be keeping a vocabulary — but a real codebase has hundreds
+of thousands of identifiers, every new repository brings more, and that
+vocabulary would have to be built, stored, versioned and **carried across two
+languages**. Hashing removes all of it.
 
-Gerçek sayılar (`hash-golden.json`'dan):
+The real numbers, from `hash-golden.json`:
 
 ```
 "name:place"        →  murmur3 →  % 4096  →   669
@@ -140,28 +141,29 @@ Gerçek sayılar (`hash-golden.json`'dan):
 "name:order"        →  murmur3 →  % 4096  →  2966
 ```
 
-Sonuç 4096 uzunluğunda bir vektör; 21 pozisyonu 1, gerisi 0.
+The result is a 4096-long vector with 21 positions set to 1 and the rest 0.
 
-> **Bu kısım repo'nun en kırılgan yeri.** Aynı hash'in ileride TypeScript
-> tarafında birebir aynı sonucu vermesi gerekiyor. Yanlış olursa **hata vermez** —
-> sessizce daha kötü tahmin eder. O yüzden hash fonksiyonu kendi modülünde
-> (`features/hashing.py`), config'i sözleşmede, ve `hash-golden.json` iki dilin de
-> okuyacağı ortak fixture olarak duruyor.
+> **This is the most fragile part of the repository.** The same hash has to
+> produce identical results in TypeScript later. If it does not, **nothing
+> raises** — predictions just get quietly worse. That is why the hash function
+> sits in its own module (`features/hashing.py`), its configuration in the
+> contract, and `hash-golden.json` as a fixture both languages read.
 >
-> Parity'yi bozan dört ayrıntı, dördü de sessiz: varyant (x86_32 mi x64_128 mi),
-> seed, işaret (`signed=False` şart — negatif sayıda `%` Python ve JavaScript'te
-> farklı davranıyor) ve kodlama.
+> Four details break parity, all of them silently: the variant (x86_32 vs
+> x64_128), the seed, signedness (`signed=False` is required — `%` on a negative
+> behaves differently in Python and JavaScript) and the encoding.
 
-**Çarpışma.** Sınırsız string'i sabit uzaya sığdırdığın için iki farklı
-feature'ın aynı kovaya düşmesi kaçınılmaz. Tolere edilebiliyor, çünkü bir sembol
-4096 kovanın yalnızca ~20'sini kullanıyor.
+**Collisions.** Squeezing unbounded strings into a fixed space means two features
+will sometimes land in the same bucket. It is tolerable because a symbol only
+lights up about 20 of the 4096 positions.
 
 ---
 
-## 5. Zaten sayı olanları hash'leme  *(stage 3)*
+## 5. Do not hash what is already a number  *(stage 3)*
 
-Bazı bilgiler zaten sayı ve **kapalı bir küme** oluşturuyor — kaç tane yan etki
-türü varsa o kadar. Kapalı kümeler sabit pozisyon alıyor. `placeOrder` için:
+Some facts are already numbers and form a **closed set** — there are exactly as
+many side-effect kinds as the parser defines. Closed sets get reserved positions.
+For `placeOrder`:
 
 ```
 [ 0] outDegree                   4        [12] paramCount                1
@@ -171,63 +173,64 @@ türü varsa o kadar. Kapalı kümeler sabit pozisyon alıyor. `placeOrder` içi
 [ 4] entrypointDistance          1        [21] returnCount               1
 [ 5] isAsync                     1        [48] sideEffect_database_write 1
 [ 6] isExported                  1
-[11] isMethod                    1        → 67 pozisyonun 14'ü dolu
+[11] isMethod                    1        → 14 of 67 positions filled
 ```
 
-**Neden bunları metne gömmüyoruz?** Diyelim modele `calls: create, reserve,
-charge, save` diye metin verdik. Modelin buradan `outDegree = 4` sonucuna varması
-için sırayla üç şey yapması gerekir: virgülün ayırıcı olduğunu anlamak, parçaları
-saymak, o sayıyı "derece" kavramına bağlamak. Üçü de garanti değil, ve model
-bunları öğrenirken tek geri bildirimi sınıf etiketi. `outDegree = 4` deyince
-sayma işi zaten yapılmış oluyor.
+**Why not embed these in the text?** Suppose the model were handed
+`calls: create, reserve, charge, save` as text. To reach `outDegree = 4` it would
+have to work out that the comma is a separator, count the pieces, and connect
+that count to the idea of a degree. None of those are guaranteed, and while
+learning them its only feedback is the class label. Given `outDegree = 4`, the
+counting is already done.
 
-**Sıra bir sözleşme.** İki pozisyonu takas edersen `comparisonCount`,
-`paramCount`'un ağırlığıyla çarpılır. Hata vermez. Sadece skor düşer, ve nedenini
-sonradan bulmak neredeyse imkânsız.
+**The order is a contract.** Swap two positions and `comparisonCount` gets
+multiplied by `paramCount`'s weight. Nothing raises. The score simply drops, and
+finding out why afterwards is close to impossible.
 
 ---
 
-## 6. İki bloğu birleştir ve ölçekle  *(stage 4)*
+## 6. Concatenate the two blocks and scale one  *(stage 4)*
 
 ```
 [0,0,...,1,...,1,...,0]  +  [4, 3, 4, 3, 1, ...]
-└──── 4096 kova, 0/1 ───┘    └── 67 sayı, ölçekli ──┘
-                  4163 sayı
+└── 4096 buckets, 0/1 ──┘    └── 67 numbers, scaled ──┘
+                  4163 numbers
 ```
 
-Toplama yok, karıştırma yok — uç uca yapıştırma. Model her pozisyona ayrı bir
-ağırlık öğreniyor ve sayının nereden geldiğini umursamıyor.
+Nothing is summed and nothing is mixed — the blocks are glued end to end. The
+model learns a separate weight per position and does not care where a position
+came from.
 
-**Neden ölçekliyoruz?** Hash bloğundaki değerler 0 veya 1. Ama sayısal blokta
-`inDegree = 47` gibi bir değer, dört bin sıfır ve birin yanında devasa duruyor ve
-eğitim sırasında tek başına diğer hepsini bastırabiliyor. Standartlaştırma
-(ortalamayı çıkar, yayılıma böl) hepsini kıyaslanabilir hale getiriyor.
+**Why scale?** The hashed half is only ever 0 or 1. The numeric half is not: a
+value like `inDegree = 47` sits next to four thousand zeros and ones and, during
+training, can drown out everything else on its own. Standardising — subtract the
+mean, divide by the spread — puts them on comparable footing.
 
-**Ölçekleyici neden `fit` ve `transform` diye ayrı?** Ortalamayı **sadece eğitim
-satırlarından** öğrenmesi gerekiyor. Her şeyin üstünde fit edersen, test
-satırları kendilerini puanlayan sayıları sessizce etkilemiş olur; her sonuç
-modelin gerçekte olduğundan iyi çıkar ve **hiçbir uyarı almazsın.** Bu ayrım o
-sızıntıyı engelleyen tek şey.
+**Why are `fit` and `transform` separate?** The scaler must learn its mean from
+the **training rows only**. Fit it on everything and the test rows have quietly
+influenced the numbers used to score them; every result comes out better than the
+model really is, and **you get no warning at all**. This split is the only thing
+preventing that.
 
 ---
 
-## 7. Vektörden olasılığa  *(stage 5)*
+## 7. From vector to probabilities  *(stage 5)*
 
-Öğrenilen şeyin tamamı bir ağırlık tablosu ve bir bias vektörü:
-
-```
-ağırlık matrisi:   10 sınıf × 4163 feature
-bias:              10 sayı
-```
-
-Tahmin:
+Everything that gets learned is a weight table and a bias vector:
 
 ```
-skorlar = W × x + b          → 10 ham sayı (logit)
-softmax(skorlar)             → toplamı 1 olan 10 olasılık
+weight matrix:   10 classes × 4163 features
+bias:            10 numbers
 ```
 
-`make explain --symbol isEligible` çıktısı (gerçek bir koşudan):
+Prediction:
+
+```
+scores = W × x + b           → 10 raw numbers (logits)
+softmax(scores)              → 10 probabilities summing to 1
+```
+
+Output of `make explain --symbol isEligible`, from a real run:
 
 ```
 domain_logic     0.799  ████████████████████████
@@ -238,64 +241,65 @@ utility          0.018  █
 tentative — domain_logic, worth a human glance
 ```
 
-**Neden tek etiket yetmiyor?** Şu ikisi top-1 alındığında birbirinin aynı
-görünüyor:
+**Why is a single label not enough?** These two look identical once you take the
+top answer:
 
 ```
 orchestrator 0.94        orchestrator 0.45
 domain_logic 0.04        domain_logic 0.40
-   model emin               yazı tura
+   model is sure            coin flip
 ```
 
-İkisi de "orchestrator" diyor. Dağılımın şekli, etiketin kendisinden daha
-bilgilendirici.
+Both say "orchestrator". The shape of the distribution carries more information
+than the label does.
 
-**Üç kova:**
+**Three buckets:**
 
 ```
-güven ≥ 0.85   →  accept       kabul et
-güven ≥ 0.65   →  tentative    şüpheli, insan baksın
-altı           →  unknown      tahmini at
+confidence ≥ 0.85   →  accept       take it
+confidence ≥ 0.65   →  tentative    flag it for a human
+below               →  unknown      throw the prediction away
 ```
 
-Yanlış etiket vermektense etiketsiz bırakmak daha ucuz — yanlış bir mimari rol,
-grafiğe güvenen her sorguya yayılıyor.
+Leaving a symbol unlabelled is cheaper than labelling it wrongly — a wrong
+architectural role propagates into every query that trusts the graph.
 
-> Bu üç eşik şu an bir **varsayım**, ölçüm değil. `evaluation/metrics.py`'daki
-> kalibrasyon kontrolü tam olarak bunu sınıyor: accept kovasındaki isabet oranı
-> gerçekten tentative'inkinden yüksek mi? Değilse eşik hiçbir şey ayırmıyor
-> demektir.
+> Those three thresholds are currently an **assumption, not a measurement**. The
+> calibration check in `evaluation/metrics.py` tests exactly this: are predictions
+> in the accept bucket really more often right than those in the tentative
+> bucket? If not, the threshold separates nothing.
 
 ---
 
-## 8. Bu boru hattının neresi makine öğrenmesi?
+## 8. Which part of this is machine learning?
 
-Bu soruyu erken sormak önemli, çünkü cevabı çoğu insanın beklediğinden dar.
+Worth asking early, because the answer is narrower than most people expect.
 
 ```
      placeOrder
           ↓
-       böl                   ┐
+       split                 ┐
           ↓                  │
-     etiketle                ├─  feature engineering
-          ↓                  │   (makine öğrenmesi DEĞİL)
-       hash'le               │
+      prefix                 ├─  feature engineering
+          ↓                  │   (NOT machine learning)
+       hash                  │
           ↓                  │
-   sayısal bloğu ekle        │
+   add the numeric block     │
           ↓                  │
-   4163 boyutlu vektör       ┘
+   4163-dimensional vector   ┘
           ↓
    ┌──────────────┐
-   │    model     │  ←────  ML tam olarak burası
+   │    model     │  ←────  this, exactly, is the ML
    └──────────────┘
           ↓
-    10 sınıf skoru
+    10 class scores
 ```
 
-Stage 1'den 4'e kadar yaptığın hiçbir şey öğrenmiyor. Aynı girdi her zaman aynı
-çıktıyı veriyor ve kurallarını sen yazdın. İşin çoğunu bu kaplıyor.
+Nothing in stages 1 through 4 learns. The same input always produces the same
+output, and you wrote the rules. That is most of the work.
 
-Peki `model/train.py`'ı ML yapan ne? Elle kural yazsaydık şöyle olurdu:
+So what makes `model/train.py` machine learning? Compare it to writing the rules
+by hand:
 
 ```python
 if "validate" in name:
@@ -304,34 +308,34 @@ if outDegree > 4 and awaitCount > 2:
     return "orchestrator"
 ```
 
-Bu çalışabilir — ama makine öğrenmesi değil, çünkü **hangi feature'ın ne kadar
-önemli olduğuna sen karar verdin.** `> 4` eşiğini sen seçtin.
+That could work — but it is not machine learning, because **you decided which
+feature matters and how much.** You picked the `> 4` threshold.
 
-Logistic regression'da ise sadece örnekleri veriyorsun ve şu tablo veriden
-çıkıyor:
+With logistic regression you supply only the examples, and this table falls out
+of the data:
 
 ```
-name:validate       validator      için   +2.8
-callee:save         orchestrator   için   +0.7
-comparisonCount     domain_logic   için   +0.9
+name:validate       for validator       +2.8
+callee:save         for orchestrator    +0.7
+comparisonCount     for domain_logic    +0.9
 ```
 
-Bu tabloyu kimse yazmadı. Makine öğrenmesinin özü tam olarak bu.
+Nobody wrote that table. That is the whole of what machine learning means here.
 
-Ve pratik sonucu: **öğrenme eğitimde bitiyor.** Çıkarım sırasında model hiçbir şey
-öğrenmiyor, sadece donmuş `W` ve `b` ile çarpma-toplama yapıyor. Üretime giden
-şeyin birkaç yüz KB'lık bir JSON dosyası olmasının sebebi bu — ne runtime, ne
-model indirmesi, ne native bağımlılık.
+And the practical consequence: **learning ends when training ends.** At inference
+the model learns nothing; it multiplies and adds with frozen `W` and `b`. That is
+why what ships to production is a few hundred KB of JSON — no runtime, no model
+download, no native dependency.
 
 ---
 
-## Sıradaki adım
+## Next
 
 ```bash
 make progress
 ```
 
-Beş aşamayı ve hangisinin sırada olduğunu basar. Her aşamanın test dosyası, ne
-yaptığını ve **neden** öyle yaptığını anlatan bir açıklamayla başlıyor.
+It prints the five stages and which one is next. Each stage's test file opens
+with what it does and **why** it is done that way.
 
-Terimlerden takıldığın olursa: [`glossary.md`](glossary.md).
+For unfamiliar terms: [`glossary.md`](glossary.md).
