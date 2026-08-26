@@ -9,6 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from . import explain as explain_module
 from .config import REPORTS_DIR, TrainingConfig
 from .data.dataset import LabeledDataset
 from .data.loader import join, load_labelset, load_symbols
@@ -57,6 +58,21 @@ def inspect(spec: FeatureSpec, taxonomy: Taxonomy) -> int:
             "  labeller error but is a missing definition. See docs/taxonomy.md."
         )
     return 0
+
+
+def explain(
+    symbols_path: Path,
+    wanted: str | None,
+    *,
+    spec: FeatureSpec,
+    taxonomy: Taxonomy,
+    model_path: Path,
+) -> int:
+    records = load_symbols(symbols_path)
+    record = explain_module.find_record(records, wanted)
+    return explain_module.explain(
+        record, records, spec=spec, taxonomy=taxonomy, model_path=model_path
+    )
 
 
 def evaluate(

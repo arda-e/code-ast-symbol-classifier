@@ -24,6 +24,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("inspect", help="show what the contracts currently declare")
 
+    explain = subparsers.add_parser(
+        "explain", help="walk one symbol through every stage of the pipeline"
+    )
+    explain.add_argument("--symbol", default=None, help="symbol id, or part of its name")
+    explain.add_argument("--symbols", type=Path, default=FIXTURES_DIR / "symbols.sample.jsonl")
+    explain.add_argument("--model", type=Path, default=MODELS_DIR / "model.v1.json")
+
     for name, help_text in DATA_COMMANDS.items():
         sub = subparsers.add_parser(name, help=help_text)
         sub.add_argument("--symbols", type=Path, default=FIXTURES_DIR / "symbols.sample.jsonl")
@@ -61,6 +68,11 @@ def _dispatch(args: argparse.Namespace) -> int:
 
     if args.command == "inspect":
         return commands.inspect(spec, taxonomy)
+
+    if args.command == "explain":
+        return commands.explain(
+            args.symbols, args.symbol, spec=spec, taxonomy=taxonomy, model_path=args.model
+        )
 
     dataset = commands.load_dataset(args.symbols, args.labels, taxonomy)
     config = TrainingConfig(variant=args.variant, folds=args.folds, seed=args.seed)

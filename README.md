@@ -38,32 +38,42 @@ is a few hundred KB of JSON with no runtime attached.
 
 ```bash
 make setup
-make test
-make inspect
+make explain      # one symbol, walked through every stage
+make progress     # what is done, what is next
 ```
 
-`inspect` works before any model exists and prints what the project is currently
-committed to — including which class definitions are still missing.
+Read [`docs/walkthrough.md`](docs/walkthrough.md) alongside `make explain` — the
+same symbol and the same numbers, one live and one explained. Unfamiliar terms
+are in [`docs/glossary.md`](docs/glossary.md), each pointing at the file where it
+turns up.
+
+`make inspect` works before any model exists and prints what the project is
+currently committed to, including which class definitions are still missing.
 
 ## Where the work is
 
-Four modules ship as signatures and docstrings with `NotImplementedError` bodies.
-Their tests are already written and currently fail; each assertion is the
-specification for the thing it tests.
+Five stages, in order. Each is a failing test file that opens with what you are
+building and why it is done that way; the assertions are the specification.
 
-| module | what it has to do |
-|---|---|
-| [`features/lexical.py`](src/code_ast_symbol_classifier/features/lexical.py) | split identifiers, prefix them by source, produce feature strings |
-| [`features/numeric.py`](src/code_ast_symbol_classifier/features/numeric.py) | read the numeric facts out in contract order |
-| [`features/build.py`](src/code_ast_symbol_classifier/features/build.py) | concatenate the two blocks, scale the numeric one, honour the variant |
-| [`model/train.py`](src/code_ast_symbol_classifier/model/train.py) | fit the logistic regression |
+| stage | what you build | module |
+|---|---|---|
+| 1 | split identifiers into words | `features/lexical.py` |
+| 2 | label each word with where it came from | `features/lexical.py` |
+| 3 | lay the numeric facts out in contract order | `features/numeric.py` |
+| 4 | join the two blocks and scale one | `features/build.py` |
+| 5 | fit the classifier | `model/train.py` |
+
+Stage 5 is three lines, and that is the point: everything before it is
+deterministic feature engineering, and only the last stage learns anything.
 
 ```bash
-make spec     # the failing specifications — this is the to-do list
+make progress                                    # the ordered to-do list
+uv run pytest tests/spec/test_stage1_split.py    # start here
 ```
 
-Everything else is in place: contracts, loaders, cross-validation, metrics,
-reporting, the ablation runner and the CLI.
+Everything downstream is already built and tested — contracts, loaders,
+cross-validation, metrics, reporting, the ablation runner and the CLI. They are
+waiting on these five stages.
 
 ## Contracts
 
@@ -84,6 +94,8 @@ regenerate the fixtures.
 ## Commands
 
 ```bash
+make explain     # one symbol through every stage
+make progress    # stage-by-stage status
 make inspect     # what the contracts declare
 make evaluate    # stratified 5-fold, full report into reports/
 make ablate      # A / B-local / B-global / C comparison
@@ -91,11 +103,19 @@ make train       # fit on everything, write models/model.v1.json
 make lint typecheck test
 ```
 
+`explain` takes `--symbol`, matching an id or part of a name:
+
+```bash
+uv run code-ast-symbol-classifier explain --symbol isEligible
+```
+
 ## Reading order
 
-1. [`docs/taxonomy.md`](docs/taxonomy.md) — the ten classes, the pairs that get argued about, and what is still undefined
-2. [`docs/data-contract.md`](docs/data-contract.md) — the input format, and why parse-time and graph-time features are versioned separately
-3. [`docs/reporting-checklist.md`](docs/reporting-checklist.md) — what has to be in a result before it is shareable
+1. [`docs/walkthrough.md`](docs/walkthrough.md) — one symbol from source to prediction, with the real numbers, and which part of this is actually machine learning
+2. [`docs/glossary.md`](docs/glossary.md) — the terms, each pointing at the file where it appears
+3. [`docs/taxonomy.md`](docs/taxonomy.md) — the ten classes, the pairs that get argued about, and what is still undefined
+4. [`docs/data-contract.md`](docs/data-contract.md) — the input format, and why parse-time and graph-time features are versioned separately
+5. [`docs/reporting-checklist.md`](docs/reporting-checklist.md) — what has to be in a result before it is shareable
 
 ## Two open items that block work downstream
 

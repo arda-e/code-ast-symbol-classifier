@@ -1,4 +1,4 @@
-.PHONY: setup lint format typecheck test spec inspect evaluate ablate train golden all
+.PHONY: setup lint format typecheck test spec progress inspect explain evaluate ablate train golden all
 
 setup:
 	uv sync --all-groups
@@ -25,8 +25,16 @@ test:
 spec:
 	uv run pytest -m spec
 
+# The same work, stage by stage, with one obvious next command.
+progress:
+	uv run python scripts/progress.py
+
 inspect:
 	uv run code-ast-symbol-classifier inspect
+
+# Walk one symbol through every stage. Works with the stages still empty.
+explain:
+	uv run code-ast-symbol-classifier explain
 
 evaluate:
 	uv run code-ast-symbol-classifier evaluate

@@ -35,12 +35,14 @@ jobs:
         run: uv run mypy src/
         continue-on-error: true
 
-      - name: Report open slots
+      # Stage by stage rather than a raw failure count, so the summary says how
+      # far the work has got and which stage comes next.
+      - name: Report progress
         if: always()
         run: |
-          echo "### Unimplemented slots" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Stage progress" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          uv run pytest -m spec -q --no-header 2>&1 | tail -n 20 >> "$GITHUB_STEP_SUMMARY" || true
+          uv run python scripts/progress.py >> "$GITHUB_STEP_SUMMARY" || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   ablation:
