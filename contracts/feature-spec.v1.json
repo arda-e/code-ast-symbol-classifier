@@ -1,0 +1,133 @@
+{
+  "featureVersion": "v1",
+  "note": [
+    "This file is the feature contract. Python (training) and TypeScript (inference)",
+    "must both read it and produce byte-identical vectors. A mismatch does not raise —",
+    "it silently degrades accuracy. Every value here is load-bearing; changing one",
+    "requires a new featureVersion and a regenerated golden fixture."
+  ],
+
+  "hash": {
+    "algorithm": "murmur3_x86_32",
+    "seed": 0,
+    "buckets": 4096,
+    "signed": false,
+    "encoding": "utf-8",
+    "occurrence": "binary",
+    "traps": {
+      "variant": "x86_32 only. x64_128 produces different numbers for the same input.",
+      "seed": "Pass the seed explicitly on both sides; never rely on a library default.",
+      "signed": "mmh3.hash() returns a SIGNED int32 in Python, and '%' on negatives differs between Python and JavaScript. Use mmh3.hash(s, seed, signed=False), or coerce with '>>> 0' in TS.",
+      "encoding": "Encode the string to UTF-8 bytes before hashing, on both sides.",
+      "forbidden": [
+        "Python's built-in hash() — salted per process (PYTHONHASHSEED), not stable across runs.",
+        "sklearn HashingVectorizer — carries its own tokenization, normalization and signed-hashing trick that would have to be reproduced exactly in TypeScript."
+      ]
+    }
+  },
+
+  "lexical": {
+    "namespaces": [
+      { "prefix": "name", "source": "the symbol's own identifier" },
+      { "prefix": "owner", "source": "enclosing class or module identifier" },
+      { "prefix": "path", "source": "every path segment INCLUDING the file name, with the extension stripped; src/orders/order.service.ts yields src, orders, order, service. The file name is kept because suffix conventions like *.service.ts or *.controller.ts are among the strongest signals a TypeScript codebase offers." },
+      { "prefix": "callee", "source": "the FULL callee expression including the receiver, e.g. this.orderFactory.create yields order, factory, create. A leading `this` receiver is dropped — it appears on nearly every method call and separates nothing." },
+      { "prefix": "accepts", "source": "parameter type names" },
+      { "prefix": "returns", "source": "return type name with generic wrappers unwrapped; Promise<Order> yields order" }
+    ],
+    "tokenization": {
+      "splits": ["camelCase", "PascalCase", "snake_case", "kebab-case", "dot.separated", "path/separated"],
+      "lowercase": true,
+      "dropTokensShorterThan": 1,
+      "featureString": "<prefix>:<token>",
+      "rationale": "Unsplit identifiers make every symbol its own bucket, so the model can only recognise names it has already seen. The namespace prefix matters just as much: name:validate and callee:validate point at different classes."
+    }
+  },
+
+  "numeric": {
+    "scaling": "StandardScaler over the numeric block only; the hashed block stays 0/1. The scaler's mean_ and scale_ ship inside the model artifact — inference must apply the same transform.",
+    "orderIsContract": "Consumers must read the vector in exactly this array order. A shifted order multiplies a value by another field's weight and nothing errors.",
+    "fields": [
+      { "name": "outDegree", "group": "degree", "stage": "post-graph", "description": "distinct call targets, after resolution" },
+      { "name": "inDegree", "group": "degree", "stage": "post-graph", "description": "how many symbols call this one" },
+      { "name": "distinctCallees", "group": "degree", "stage": "post-graph", "description": "unique callee symbols" },
+      { "name": "distinctCallers", "group": "degree", "stage": "post-graph", "description": "unique caller symbols" },
+      { "name": "entrypointDistance", "group": "degree", "stage": "post-graph", "description": "shortest hop count from any entrypoint; -1 when unreachable" },
+
+      { "name": "isAsync", "group": "flag", "stage": "parse", "description": "1 when declared async" },
+      { "name": "isExported", "group": "flag", "stage": "parse", "description": "1 when exported from its module" },
+      { "name": "isStatic", "group": "flag", "stage": "parse", "description": "1 for static members" },
+      { "name": "isGenerator", "group": "flag", "stage": "parse", "description": "1 for generator functions" },
+      { "name": "hasThrow", "group": "flag", "stage": "parse", "description": "1 when the body contains a throw statement" },
+      { "name": "isBodyless", "group": "flag", "stage": "parse", "description": "1 for declarations without a body (overloads, interface members)" },
+      { "name": "isMethod", "group": "flag", "stage": "parse", "description": "1 when the symbol is a class member" },
+
+      { "name": "paramCount", "group": "size", "stage": "parse", "description": "declared parameter count" },
+      { "name": "statementCount", "group": "size", "stage": "parse", "description": "top-level statements in the body" },
+      { "name": "lineCount", "group": "size", "stage": "parse", "description": "end line minus start line" },
+
+      { "name": "comparisonCount", "group": "ast", "stage": "parse", "description": "binary comparison expressions: < <= > >= == != === !==" },
+      { "name": "arithmeticCount", "group": "ast", "stage": "parse", "description": "binary arithmetic expressions: + - * / % **" },
+      { "name": "branchCount", "group": "ast", "stage": "parse", "description": "if / switch-case / catch clauses. Deliberately EXCLUDES && and || short-circuits — see logicalCount." },
+      { "name": "logicalCount", "group": "ast", "stage": "parse", "description": "&& and || operators, counted separately so branchCount stays a statement-level notion" },
+      { "name": "loopCount", "group": "ast", "stage": "parse", "description": "for / for-of / for-in / while / do-while" },
+      { "name": "awaitCount", "group": "ast", "stage": "parse", "description": "await expressions" },
+      { "name": "returnCount", "group": "ast", "stage": "parse", "description": "return statements" },
+      { "name": "ternaryCount", "group": "ast", "stage": "parse", "description": "conditional expressions" },
+      { "name": "optionalChainCount", "group": "ast", "stage": "parse", "description": "?. operators" },
+
+      { "name": "sideEffect_http_route_registration", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_http_response_write", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_kafka_publish", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_kafka_consume", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_db_query", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_db_transaction", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_s3_write", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_s3_read", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_filesystem_read", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_filesystem_write", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_filesystem_delete", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_cache_read", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_cache_write", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_process_spawn", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_process_control", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_process_root_call", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_lifecycle_init", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_timer", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_logging", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_serialization", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_crypto_hash", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_progress_update", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_pipeline_enqueue", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_database_read", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_database_write", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_network_request", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_cryptographic_operation", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_password_hash", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_password_compare", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_token_generation", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_random_read", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_clock_read", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_uuid_generation", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_environment_access", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_external_io", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_unknown_external_effect", "group": "sideEffect", "stage": "parse" },
+      { "name": "sideEffect_unknown_effect", "group": "sideEffect", "stage": "parse" },
+
+      { "name": "mutation_collection_write", "group": "mutation", "stage": "parse" },
+      { "name": "mutation_collection_delete", "group": "mutation", "stage": "parse" },
+      { "name": "mutation_collection_clear", "group": "mutation", "stage": "parse" },
+      { "name": "mutation_state_write", "group": "mutation", "stage": "parse" },
+      { "name": "mutation_field_write", "group": "mutation", "stage": "parse" },
+      { "name": "mutation_object_write", "group": "mutation", "stage": "parse" }
+    ]
+  },
+
+  "ablationVariants": {
+    "A": { "lexical": true, "numericGroups": [] },
+    "B-local": { "lexical": false, "numericGroups": ["flag", "size", "ast", "sideEffect", "mutation"] },
+    "B-global": { "lexical": false, "numericGroups": ["degree"] },
+    "C": { "lexical": true, "numericGroups": ["degree", "flag", "size", "ast", "sideEffect", "mutation"] },
+    "rationale": "B is split because degree fields are graph-global and everything else is file-local. Measured together they cannot answer whether classification can stay file-incremental."
+  }
+}

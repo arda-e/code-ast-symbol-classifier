@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - run: uv sync --all-groups
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      # Slot specifications are excluded: they fail by design until the module
+      # they describe is written, and this step has to stay meaningful.
+      - name: Test
+        run: uv run pytest -m "not spec"
+
+      # Not blocking yet. ML code carries a lot of untyped numpy and sklearn
+      # surface; the gate tightens once the feature modules settle.
+      - name: Type check
+        run: uv run mypy src/
+        continue-on-error: true
+
+      # Stage by stage rather than a raw failure count, so the summary says how
+      # far the work has got and which stage comes next.
+      - name: Report progress
+        if: always()
+        run: |
+          echo "### Stage progress" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          uv run python scripts/progress.py >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  ablation:
+    runs-on: ubuntu-latest
+    # Training is seconds on this model, so the measurement runs on every PR
+    # rather than on a nightly schedule. It never blocks: its job is to make a
+    # metric change visible while the change is being reviewed.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - run: uv sync --all-groups
+
+      - name: Run ablation
+        run: |
+          echo "### Ablation" >> "$GITHUB_STEP_SUMMARY"
+          uv run code-ast-symbol-classifier ablate | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: reports/
+          if-no-files-found: ignore
